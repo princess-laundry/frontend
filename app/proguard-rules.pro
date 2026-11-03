@@ -1,0 +1,2 @@
+-keep class com.google.mediapipe.** { *; }
+-keepattributes Signature,InnerClasses,EnclosingMethod
