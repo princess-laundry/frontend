@@ -7,9 +7,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.sidefocus.app.camera.CameraFrame
 import com.sidefocus.app.data.*
+import com.sidefocus.app.sync.*
+import androidx.work.WorkManager
 import com.sidefocus.core.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
@@ -33,6 +36,10 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     var report by mutableStateOf<StudySession?>(null); private set
     var selectedDate by mutableStateOf(LocalDate.now(ZoneId.of("Asia/Seoul"))); private set
     var message by mutableStateOf<String?>(null); private set
+    var connecting by mutableStateOf(false); private set
+    val syncInfo = WorkManager.getInstance(app).getWorkInfosForUniqueWorkFlow(SYNC_WORK)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private var sessionThresholds = app.preferences.thresholds()
     private var estimator = PostureEstimator(app.preferences.thresholds())
     private val setupGate = SetupGate()
     private var recorder: SessionRecorder? = null
@@ -42,11 +49,13 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     private var checkpointJob: Job? = null
     private val saveMutex = kotlinx.coroutines.sync.Mutex()
     val paused: Boolean get() = recorder?.paused == true
+    val analysisIntervalMs: Long get() = 1000L / sessionThresholds.analysisFps
 
     init {
         viewModelScope.launch {
             runCatching { app.store.recoverInterrupted() }.onFailure { message = "저장한 기록을 불러오지 못했어요." }
             ready = true
+            scheduleSync(app)
             while (isActive) {
                 delay(250)
                 val now = SystemClock.elapsedRealtime()
@@ -69,7 +78,8 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     fun beginSetup(isDemo: Boolean = false) {
         if (!ready || recorder != null) return
         demo = isDemo
-        estimator = PostureEstimator(app.preferences.thresholds())
+        sessionThresholds = app.preferences.thresholds()
+        estimator = PostureEstimator(sessionThresholds)
         feedback = PoseFeedback()
         cameraError = null
         setupGate.reset(); setup = SetupProgress()
@@ -79,7 +89,7 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     fun cancelSetup() { if (recorder == null) { setupGate.reset(); screen = Screen.HOME } }
     fun switchCamera() {
         frontCamera = !frontCamera
-        estimator = PostureEstimator(app.preferences.thresholds())
+        estimator = PostureEstimator(sessionThresholds)
         setupGate.reset(); setup = SetupProgress(); feedback = PoseFeedback(); cameraError = null
     }
     fun cameraFailure(value: String) {
@@ -88,7 +98,12 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
         setupGate.reset(); setup = SetupProgress()
         if (recorder != null && !paused) pause()
     }
-    fun retryCamera() { cameraError = null; estimator = PostureEstimator(app.preferences.thresholds()) }
+    fun retryCamera() { cameraError = null; estimator = PostureEstimator(sessionThresholds) }
+    fun reframe() {
+        estimator = PostureEstimator(sessionThresholds)
+        feedback = PoseFeedback()
+        recorder?.transition(Posture.UNKNOWN, SystemClock.elapsedRealtime())
+    }
     fun deviceStable(value: Boolean) { stable = value }
 
     fun frame(frame: CameraFrame) {
@@ -109,7 +124,7 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     private fun startSession() {
         val now = SystemClock.elapsedRealtime()
         lastFrameAt = now
-        recorder = SessionRecorder(UUID.randomUUID().toString(), System.currentTimeMillis(), now, demo, app.preferences.thresholds().version)
+        recorder = SessionRecorder(UUID.randomUUID().toString(), System.currentTimeMillis(), now, demo, sessionThresholds.version)
         recorder!!.transition(if (demo) Posture.NORMAL else feedback.state, now)
         if (demo) feedback = PoseFeedback(Posture.NORMAL, message = "직접 상태를 바꿔 앱 흐름을 확인하세요")
         snapshot = recorder!!.snapshot(now)
@@ -131,7 +146,7 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun resume() {
         if (cameraError != null) return
-        estimator = PostureEstimator(app.preferences.thresholds())
+        estimator = PostureEstimator(sessionThresholds)
         lastFrameAt = SystemClock.elapsedRealtime()
         recorder?.resume(lastFrameAt)
         if (demo) demoState(Posture.NORMAL)
@@ -154,7 +169,7 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
         checkpointJob?.cancel()
         viewModelScope.launch {
             saveMutex.lock()
-            try { app.store.checkpoint(result, false) }
+            try { app.store.checkpoint(result, false); scheduleSync(app) }
             catch (_: Exception) { message = "기록 저장에 실패했어요. 다시 저장을 눌러 주세요." }
             finally { saveMutex.unlock() }
         }
@@ -163,21 +178,69 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
         val result = report ?: return
         viewModelScope.launch {
             runCatching { app.store.checkpoint(result, false) }
-                .onSuccess { message = "기록을 저장했어요" }
+                .onSuccess { scheduleSync(app); message = "기록을 저장했어요" }
                 .onFailure { message = "저장 공간을 확인한 뒤 다시 시도해 주세요" }
         }
     }
     fun openReport(value: StudySession) { report = value; screen = Screen.REPORT }
     fun deleteSession(id: String) {
         viewModelScope.launch {
-            runCatching { app.store.dao.delete(id) }.onSuccess { screen = Screen.STATS }
+            runCatching { app.syncMutex.withLock { app.store.dao.delete(id) } }.onSuccess { screen = Screen.STATS }
                 .onFailure { message = "삭제하지 못했어요. 다시 시도해 주세요." }
         }
     }
     fun deleteLocalData() {
         viewModelScope.launch {
-            runCatching { app.store.dao.deleteAll() }.onSuccess { report = null; message = "기기의 기록을 모두 삭제했어요" }
+            runCatching { app.syncMutex.withLock { app.store.dao.deleteAll() } }.onSuccess { report = null; message = "기기의 기록을 모두 삭제했어요" }
                 .onFailure { message = "기록을 삭제하지 못했어요" }
+        }
+    }
+    fun connectServer(value: String) {
+        if (connecting) return
+        val endpoint = runCatching { normalizeEndpoint(value) }.getOrElse { message = it.message; return }
+        connecting = true
+        viewModelScope.launch {
+            try {
+                app.syncMutex.withLock {
+                    val config = withContext(Dispatchers.IO) { SyncClient(endpoint, app.preferences.deviceId, TokenVault(app)).config() }
+                    app.preferences.saveThresholds(config)
+                    settings(preferences.value.copy(endpoint = endpoint))
+                }
+                scheduleSync(app)
+                message = "서버에 연결했어요. 저장된 기록의 전송을 예약했어요."
+            } catch (exception: CancellationException) { throw exception }
+            catch (_: Exception) { message = "연결하지 못했어요. 서버 주소와 네트워크를 확인해 주세요." }
+            finally { connecting = false }
+        }
+    }
+    fun syncNow() {
+        viewModelScope.launch { app.store.dao.retryErrors(); scheduleSync(app); message = "기록 전송을 예약했어요" }
+    }
+    fun disconnectServer() {
+        viewModelScope.launch {
+            settings(preferences.value.copy(endpoint = ""))
+            WorkManager.getInstance(app).cancelUniqueWork(SYNC_WORK)
+            app.syncMutex.withLock { withContext(Dispatchers.IO) { TokenVault(app).clear() } }
+            message = "서버 연결을 해제했어요. 기기 기록은 보관돼요."
+        }
+    }
+    fun deleteRemoteAndLocalData() {
+        if (connecting || preferences.value.endpoint.isBlank()) return
+        connecting = true
+        viewModelScope.launch {
+            try {
+                app.syncMutex.withLock {
+                    withContext(Dispatchers.IO) { SyncClient(preferences.value.endpoint, app.preferences.deviceId, TokenVault(app)).deleteUser() }
+                    settings(preferences.value.copy(endpoint = ""))
+                    WorkManager.getInstance(app).cancelUniqueWork(SYNC_WORK)
+                    app.store.dao.deleteAll()
+                    app.preferences.reset()
+                    report = null
+                }
+                message = "서버와 기기의 데이터를 모두 삭제했어요"
+            } catch (exception: CancellationException) { throw exception }
+            catch (_: Exception) { message = "서버 삭제에 실패했어요. 기기 기록은 보존했어요." }
+            finally { connecting = false }
         }
     }
     private fun checkpoint(active: Boolean) {

@@ -13,6 +13,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sidefocus.app.FocusViewModel
 import com.sidefocus.app.data.AlertMode
+import androidx.work.WorkInfo
 
 @Composable
 fun SettingsScreen(vm: FocusViewModel) {
@@ -63,8 +64,41 @@ private fun PreferenceToggle(title: String, detail: String, checked: Boolean, on
 
 @Composable
 private fun ServerSettings(vm: FocusViewModel) {
+    val prefs by vm.preferences.collectAsState()
+    val rows by vm.rows.collectAsState()
+    val work by vm.syncInfo.collectAsState()
+    var endpoint by remember(prefs.endpoint) { mutableStateOf(prefs.endpoint) }
+    var expanded by remember { mutableStateOf(false) }
+    var deleteRemote by remember { mutableStateOf(false) }
+    val last = work.lastOrNull()
+    val working = last?.state in listOf(WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED)
     FocusCard {
         Text("오프라인으로도 기록해요", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Text("공부 기록은 먼저 기기에 저장돼요. 서버 연결은 다음 단계에서 설정할 수 있어요.", style = MaterialTheme.typography.bodySmall)
+        Text("공부 기록은 먼저 기기에 저장돼요. 서버를 연결하면 시간과 자세 상태를 자동으로 전송해요.", style = MaterialTheme.typography.bodySmall)
+        if (prefs.endpoint.isNotBlank()) {
+            Text("연결됨 · ${rows.count { it.syncStatus == "PENDING" }}건 대기 · ${rows.count { it.syncStatus == "ERROR" }}건 확인 필요", style = MaterialTheme.typography.labelSmall, color = Teal)
+            Text(when { last?.state == WorkInfo.State.FAILED -> "서버 응답을 확인해 주세요. 기록은 기기에 보존돼요."
+                working -> "네트워크 연결 후 순서대로 전송해요. 실패하면 자동으로 다시 시도해요."
+                else -> "마지막 전송 작업을 마쳤어요." }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = vm::syncNow, enabled = !vm.connecting) { Text("지금 동기화") }
+                TextButton(onClick = vm::disconnectServer, enabled = !vm.connecting) { Text("연결 해제") }
+            }
+        }
+        TextButton(onClick = { expanded = !expanded }, enabled = !vm.connecting) { Text(if (expanded) "서버 설정 접기" else "개발용 서버 연결") }
+        if (expanded) {
+            OutlinedTextField(endpoint, { endpoint = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text("HTTPS 서버 주소") }, placeholder = { Text("https://focus.example.com") }, enabled = !vm.connecting)
+            Text("연결하면 이 기기에 쌓인 실제 기록을 모두 전송해요. 서버의 기기 인증과 설정 API가 준비되어 있어야 해요.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = { vm.connectServer(endpoint) }, enabled = endpoint.isNotBlank() && !vm.connecting) {
+                if (vm.connecting) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }
+                Text(if (vm.connecting) "서버 확인 중" else "확인하고 연결")
+            }
+        }
+        if (prefs.endpoint.isNotBlank()) TextButton(onClick = { deleteRemote = true }, enabled = !vm.connecting) { Text("서버와 기기 데이터 모두 삭제", color = MaterialTheme.colorScheme.error) }
     }
+    if (deleteRemote) AlertDialog(onDismissRequest = { deleteRemote = false }, title = { Text("모든 데이터를 삭제할까요?") },
+        text = { Text("서버의 본인 세션·통계·설정과 기기의 모든 기록을 삭제해요. 서버 삭제가 성공한 경우에만 기기 기록을 지워요. 되돌릴 수 없어요.") },
+        confirmButton = { TextButton(onClick = { deleteRemote = false; vm.deleteRemoteAndLocalData() }) { Text("모두 삭제") } },
+        dismissButton = { TextButton(onClick = { deleteRemote = false }) { Text("취소") } })
 }

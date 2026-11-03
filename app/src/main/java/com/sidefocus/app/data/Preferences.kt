@@ -32,6 +32,7 @@ class PreferenceStore(context: Context) {
         AppJson.decodeFromString<Thresholds>(prefs.getString("thresholds", null) ?: error("No config"))
     }.getOrDefault(Thresholds())
     fun saveThresholds(value: Thresholds) { prefs.edit().putString("thresholds", AppJson.encodeToString(value)).apply() }
+    fun reset() { prefs.edit().clear().apply(); mutable.value = Preferences() }
     private fun read() = Preferences(
         alertMode = runCatching { AlertMode.valueOf(prefs.getString("alert", "VIBRATION")!!) }.getOrDefault(AlertMode.VIBRATION),
         skeletonOnly = prefs.getBoolean("skeleton", true), dimScreen = prefs.getBoolean("dim", true),

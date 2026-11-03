@@ -34,6 +34,8 @@ interface SessionDao {
     @Upsert suspend fun save(row: SessionRow)
     @Query("UPDATE sessions SET syncStatus = :status, syncError = :error WHERE id = :id")
     suspend fun markSync(id: String, status: String, error: String? = null)
+    @Query("UPDATE sessions SET syncStatus = 'PENDING', syncError = NULL WHERE syncStatus = 'ERROR'")
+    suspend fun retryErrors()
     @Query("DELETE FROM sessions WHERE id = :id") suspend fun delete(id: String)
     @Query("DELETE FROM sessions") suspend fun deleteAll()
 }

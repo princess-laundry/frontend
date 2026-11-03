@@ -51,7 +51,7 @@ fun CameraPanel(vm: FocusViewModel, foreground: Boolean, modifier: Modifier = Mo
         if (vm.demo || permission) {
             CameraSurface(enabled = !vm.demo && foreground && !vm.paused && vm.cameraError == null,
                 skeletonOnly = prefs.skeletonOnly, useFrontCamera = vm.frontCamera,
-                intervalMs = if (vm.feedback.state == Posture.AWAY) 1000 else 1000L / 5,
+                intervalMs = if (vm.feedback.state == Posture.AWAY) 1000 else vm.analysisIntervalMs,
                 feedback = vm.feedback, frameSize = vm.frameSize, onFrame = vm::frame, onError = vm::cameraFailure,
                 modifier = Modifier.fillMaxSize())
             Row(Modifier.align(Alignment.TopStart).padding(16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -130,6 +130,7 @@ fun SessionScreen(vm: FocusViewModel, foreground: Boolean, onFinish: () -> Unit)
         FocusCard(color = postureColor(state).copy(alpha = 0.08f)) {
             Text(if (vm.paused) "잠깐 쉬어 가도 괜찮아요" else vm.feedback.message, style = MaterialTheme.typography.titleSmall, color = postureColor(state))
             Text(if (vm.paused) "준비되면 이어하기를 눌러 주세요." else "바른 자세 ${if (session.studyMs > 0) percent(session.normalRatio) else "—"} · 알림 ${session.alertCount}회", style = MaterialTheme.typography.bodySmall)
+            if (vm.feedback.needsReset && !vm.demo) TextButton(onClick = vm::reframe) { Text("현재 구도로 다시 확인") }
         }
         if (vm.demo) {
             Text("상태를 눌러 기록 흐름을 확인하세요.\n데모 기록은 통계와 서버 전송에서 제외돼요.", style = MaterialTheme.typography.bodySmall, color = Blue)
