@@ -55,7 +55,11 @@ fun CameraSurface(
 ) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FIT_CENTER } }
+    val previewView = remember { PreviewView(context).apply {
+        scaleType = PreviewView.ScaleType.FIT_CENTER
+        // TextureView respects alpha when skeleton-only mode hides the camera image.
+        implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+    } }
     val latestFrame by rememberUpdatedState(onFrame)
     val latestError by rememberUpdatedState(onError)
     val latestInterval by rememberUpdatedState(intervalMs)

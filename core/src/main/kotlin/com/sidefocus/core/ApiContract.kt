@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 import java.net.URI
 import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 fun normalizeEndpoint(value: String): String {
     val uri = URI(value.trim())
@@ -42,7 +43,7 @@ fun StudySession.upload(appVersion: String): SessionUpload {
     val normal = duration(Posture.NORMAL) / 1000
     val fhp = duration(Posture.FHP) / 1000
     val lean = duration(Posture.LEAN) / 1000
-    fun iso(epoch: Long) = Instant.ofEpochMilli(epoch).atZone(ZoneId.of("Asia/Seoul")).toOffsetDateTime().toString()
+    fun iso(epoch: Long) = Instant.ofEpochMilli(epoch).atZone(ZoneId.of("Asia/Seoul")).format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
     return SessionUpload(id, iso(startedAt), iso(endedAt), thresholdVersion, appVersion,
         UploadSummary(normal + fhp + lean, duration(Posture.AWAY) / 1000, normal, fhp, lean, alertCount),
         segments.filter { it.state in setOf(Posture.NORMAL, Posture.FHP, Posture.LEAN, Posture.AWAY) }

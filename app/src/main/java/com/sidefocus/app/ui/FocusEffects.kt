@@ -19,7 +19,7 @@ fun FocusEffects(vm: FocusViewModel, foreground: Boolean) {
     val context = LocalContext.current
     val preferences by vm.preferences.collectAsState()
     val active = vm.screen == Screen.SESSION && foreground && !vm.paused
-    var lastAlert by remember { mutableLongStateOf(0L) }
+    var lastAlert by remember { mutableLongStateOf(-30_000L) }
     var speechReady by remember { mutableStateOf(false) }
     val speech = remember { TextToSpeech(context) { speechReady = it == TextToSpeech.SUCCESS } }
     DisposableEffect(speech) { onDispose { speech.stop(); speech.shutdown() } }

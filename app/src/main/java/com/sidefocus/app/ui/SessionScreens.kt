@@ -71,6 +71,9 @@ fun CameraPanel(vm: FocusViewModel, foreground: Boolean, modifier: Modifier = Mo
                 TextButton(onClick = vm::retryCamera) { Text("카메라 다시 연결", color = Color(0xFF89AEFF)) }
             }
             if (vm.screen == Screen.SETUP && vm.setup.countdown != null) Text("${vm.setup.countdown}", Modifier.align(Alignment.Center), fontSize = 72.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            if (!vm.demo && vm.cameraError == null) Surface(Modifier.align(Alignment.BottomStart).padding(14.dp), color = Color(0xCC17243A), shape = RoundedCornerShape(8.dp)) {
+                Text("영상 미저장 · 외부 전송 없음", Modifier.padding(horizontal = 10.dp, vertical = 7.dp), color = Color(0xFFC9D5E8), style = MaterialTheme.typography.labelSmall)
+            }
         } else {
             Column(Modifier.fillMaxSize().background(Color(0xFFEAF0FF)).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Icon(Icons.Outlined.CameraAlt, null, tint = Blue, modifier = Modifier.size(40.dp))

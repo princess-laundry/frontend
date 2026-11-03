@@ -41,4 +41,19 @@ class PostureEstimatorTest {
         assertFailsWith<IllegalArgumentException> { Thresholds(headRatio = Double.NaN) }
         assertFailsWith<IllegalArgumentException> { Thresholds(analysisFps = 500) }
     }
+    @Test fun `torso leaning is classified independently of head offset`() {
+        val estimator = PostureEstimator()
+        val leaning = body(headX = 190.0, shoulderX = 190.0)
+        var feedback = PoseFeedback()
+        for (time in 0L..3000L step 200) feedback = estimator.update(PoseObservation(time, true, leaning))
+        assertEquals(Posture.LEAN, feedback.state)
+        assertEquals(0.0, feedback.headRatio)
+    }
+    @Test fun `nonfinite landmarks cannot pass the setup gate`() {
+        val estimator = PostureEstimator()
+        val invalid = BodySide(Point(Double.NaN, 10.0), Point(20.0, 30.0), Point(20.0, 100.0))
+        val feedback = estimator.update(PoseObservation(0, true, invalid))
+        assertFalse(feedback.framed)
+        assertEquals(Posture.UNKNOWN, feedback.state)
+    }
 }
