@@ -10,12 +10,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.sidefocus.app.ui.FocusApp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { FocusTheme { FoundationScreen() } }
+        setContent { FocusTheme { FocusApp() } }
     }
 }
 
@@ -31,14 +32,3 @@ fun FocusTheme(content: @Composable () -> Unit) {
     )
 }
 
-@Composable
-private fun FoundationScreen() {
-    Scaffold { padding ->
-        Column(Modifier.padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("사이드포커스", style = MaterialTheme.typography.headlineLarge)
-            Text("바른 자세로, 더 깊은 집중", style = MaterialTheme.typography.titleMedium)
-            Text("책상 옆에 스마트폰을 놓고 나의 공부 시간과 자세를 함께 기록하세요.")
-            Text("영상은 저장하거나 전송하지 않아요.", color = MaterialTheme.colorScheme.secondary)
-        }
-    }
-}
