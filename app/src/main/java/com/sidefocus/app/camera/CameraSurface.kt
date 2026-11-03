@@ -10,6 +10,9 @@ import android.os.SystemClock
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.Canvas
@@ -99,8 +102,12 @@ fun CameraSurface(
                     provider = future.get()
                     val selector = if (useFrontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
                     check(provider!!.hasCamera(selector)) { "선택한 카메라를 사용할 수 없어요. 다른 카메라로 전환해 주세요." }
-                    preview = Preview.Builder().build().apply { surfaceProvider = previewView.surfaceProvider }
+                    val resolution = ResolutionSelector.Builder()
+                        .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+                        .setResolutionStrategy(ResolutionStrategy(android.util.Size(640, 480), ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)).build()
+                    preview = Preview.Builder().setResolutionSelector(resolution).build().apply { surfaceProvider = previewView.surfaceProvider }
                     analysis = ImageAnalysis.Builder()
+                        .setResolutionSelector(resolution)
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                         .build().apply {
@@ -125,7 +132,8 @@ fun CameraSurface(
                                         fun side(ear: Int, shoulder: Int, hip: Int): BodySide? {
                                             if (landmarks == null || landmarks.size < 25) return null
                                             fun point(i: Int) = landmarks[i].let { p -> Point(p.x().toDouble() * bitmap.width,
-                                                p.y().toDouble() * bitmap.height, minOf(p.visibility().orElse(0f), p.presence().orElse(0f))) }
+                                                p.y().toDouble() * bitmap.height,
+                                                if (p.x() in 0f..1f && p.y() in 0f..1f) minOf(p.visibility().orElse(0f), p.presence().orElse(0f)) else 0f) }
                                             return BodySide(point(ear), point(shoulder), point(hip))
                                         }
                                         val frame = CameraFrame(PoseObservation(now, landmarks != null, side(7,11,23), side(8,12,24)), bitmap.width, bitmap.height)

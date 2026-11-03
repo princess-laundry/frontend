@@ -22,6 +22,7 @@ data class Thresholds(
 data class Point(val x: Double, val y: Double, val confidence: Float = 1f)
 data class BodySide(val ear: Point, val shoulder: Point, val hip: Point) {
     val confidence: Float get() = minOf(ear.confidence, shoulder.confidence, hip.confidence)
+    val valid: Boolean get() = listOf(ear, shoulder, hip).all { it.x.isFinite() && it.y.isFinite() }
 }
 data class PoseObservation(val timestampMs: Long, val personDetected: Boolean, val left: BodySide? = null, val right: BodySide? = null)
 data class PoseFeedback(
@@ -47,7 +48,7 @@ class PostureEstimator(private val thresholds: Thresholds = Thresholds()) {
 
     fun update(observation: PoseObservation): PoseFeedback {
         val body = listOfNotNull(observation.left, observation.right)
-            .filter { it.confidence >= 0.5f }
+            .filter { it.valid && it.confidence >= 0.5f }
             .maxByOrNull { (it.ear.confidence + it.shoulder.confidence + it.hip.confidence) / 3 }
         if (body == null) {
             val since = missingSince ?: observation.timestampMs.also { missingSince = it }
