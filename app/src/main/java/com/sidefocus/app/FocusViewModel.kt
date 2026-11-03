@@ -58,16 +58,20 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
             scheduleSync(app)
             while (isActive) {
                 delay(250)
-                val now = SystemClock.elapsedRealtime()
-                val active = recorder ?: continue
-                if (!active.paused && now - lastFrameAt > 3000) {
-                    feedback = PoseFeedback(message = "카메라 입력을 기다리고 있어요")
-                    active.transition(Posture.UNKNOWN, now)
-                }
-                snapshot = active.snapshot(now)
-                if (now - lastCheckpoint >= 5000) checkpoint(active = true)
+                updateSessionClock()
             }
         }
+    }
+
+    private fun updateSessionClock() {
+        val active = recorder ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (!active.paused && now - lastFrameAt > 3000) {
+            feedback = PoseFeedback(message = "카메라 입력을 기다리고 있어요")
+            active.transition(Posture.UNKNOWN, now)
+        }
+        snapshot = active.snapshot(now)
+        if (now - lastCheckpoint >= 5000) checkpoint(active = true)
     }
 
     fun navigate(target: Screen) { if (recorder == null) screen = target }

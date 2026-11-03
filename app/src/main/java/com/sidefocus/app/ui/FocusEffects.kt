@@ -27,7 +27,11 @@ fun FocusEffects(vm: FocusViewModel, foreground: Boolean) {
         if (speechReady && preferences.voiceGuide && foreground && !vm.demo) {
             speech.language = Locale.KOREAN
             val words = when (vm.screen) {
-                Screen.SETUP -> vm.setup.countdown?.let { if (it > 0) it.toString() else null } ?: "스마트폰을 책상 옆에 놓고 귀, 어깨, 골반이 보이도록 앉아 주세요"
+                Screen.SETUP -> when (val countdown = vm.setup.countdown) {
+                    null -> "스마트폰을 책상 옆에 놓고 귀, 어깨, 골반이 보이도록 앉아 주세요"
+                    0 -> null
+                    else -> countdown.toString()
+                }
                 Screen.SESSION -> "집중을 시작합니다"
                 else -> null
             }
