@@ -2,10 +2,21 @@ package com.sidefocus.app
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.os.SystemClock
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelProvider
 import androidx.work.testing.WorkManagerTestInitHelper
+import com.sidefocus.app.camera.CameraFrame
+import com.sidefocus.core.BodySide
+import com.sidefocus.core.Point
+import com.sidefocus.core.PoseObservation
+import com.sidefocus.core.Posture
+import com.sidefocus.core.Segment
+import com.sidefocus.core.StudySession
+import com.sidefocus.core.Thresholds
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -16,7 +27,9 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
+import org.robolectric.shadows.ShadowSystemClock
 import java.io.File
+import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w411dp-h891dp", application = FocusApplication::class)
@@ -29,7 +42,7 @@ class AppFlowTest {
     }
     @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
 
-    @Test fun `navigate screens and finish a demo without camera permission`() {
+    @Test fun `run demo then verify v2 starts directly and recognizes bowed head`() {
         val vm = ViewModelProvider(compose.activity)[FocusViewModel::class.java]
         compose.waitUntil(10_000) { vm.ready }
         compose.onNodeWithText("집중 시작하기").assertIsEnabled()
@@ -56,6 +69,50 @@ class AppFlowTest {
         screenshot("06-report")
         compose.waitUntil(10_000) { vm.rows.value.any { it.session().demo } }
         assertTrue(vm.rows.value.all { it.syncStatus == "DEMO" })
+        verifyV2Session(vm)
+        verifyLegacyReport(vm)
+    }
+
+    private fun verifyV2Session(vm: FocusViewModel) {
+        compose.runOnIdle {
+            val app = compose.activity.application as FocusApplication
+            app.preferences.saveThresholds(Thresholds(version = 1, leanDegrees = 20.0))
+            vm.beginSetup()
+            feedFrames(vm, count = 30, noseY = 30.0)
+            assertEquals(Screen.SETUP, vm.screen)
+            feedFrames(vm, count = 1, noseY = 30.0)
+            assertEquals(Screen.SESSION, vm.screen)
+            assertEquals(2, vm.snapshot?.thresholdVersion)
+            feedFrames(vm, count = 20, noseY = 30.0)
+            assertEquals(Posture.NORMAL, vm.feedback.state)
+            feedFrames(vm, count = 20, noseY = 90.0)
+            assertEquals(Posture.FHP, vm.feedback.state)
+            assertFalse(vm.feedback.calibrated)
+        }
+        compose.onNodeWithText("거북목").assertIsDisplayed()
+        compose.runOnIdle { vm.finish() }
+    }
+
+    private fun feedFrames(vm: FocusViewModel, count: Int, noseY: Double) {
+        val side = BodySide(Point(100.0, 30.0), Point(100.0, 100.0), Point(100.0, 300.0))
+        repeat(count) {
+            ShadowSystemClock.advanceBy(Duration.ofMillis(200))
+            val pose = PoseObservation(SystemClock.elapsedRealtime(), true, right = side, nose = Point(140.0, noseY))
+            vm.frame(CameraFrame(pose, 480, 640))
+        }
+    }
+
+    private fun verifyLegacyReport(vm: FocusViewModel) {
+        compose.runOnIdle {
+            vm.openReport(StudySession("legacy", 0, 12000, listOf(
+                Segment(Posture.NORMAL, 0, 7000),
+                Segment(Posture.FHP, 7000, 9000),
+                Segment(Posture.LEAN, 9000, 12000)
+            )))
+        }
+        compose.onNodeWithText("거북목").assertIsDisplayed()
+        compose.onNodeWithText("5초").assertIsDisplayed()
+        compose.onNodeWithText("상체 기울임").assertDoesNotExist()
     }
 
     private fun screenshot(name: String) {

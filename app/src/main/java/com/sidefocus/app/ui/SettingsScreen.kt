@@ -43,7 +43,7 @@ fun SettingsScreen(vm: FocusViewModel) {
         }
         ServerSettings(vm)
         OutlinedButton(onClick = { delete = true }, modifier = Modifier.fillMaxWidth()) { Text("기기의 모든 기록 삭제", color = MaterialTheme.colorScheme.error) }
-        Text("사이드포커스 0.1.0 · Android\n실험 전 초기 판정 기준을 사용해요.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("사이드포커스 0.1.0 · Android", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         PrivacyNote()
     }
     if (delete) AlertDialog(onDismissRequest = { delete = false }, title = { Text("기기 기록을 모두 삭제할까요?") },

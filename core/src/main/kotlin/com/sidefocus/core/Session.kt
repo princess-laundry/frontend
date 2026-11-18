@@ -7,7 +7,7 @@ import java.time.ZoneId
 
 @Serializable
 enum class Posture(val label: String) {
-    NORMAL("바른 자세"), FHP("머리가 앞으로"), LEAN("상체 기울임"),
+    NORMAL("바른 자세"), FHP("거북목"), LEAN("상체 기울임"),
     AWAY("자리 비움"), UNKNOWN("자세 확인 중"), PAUSED("일시정지")
 }
 
