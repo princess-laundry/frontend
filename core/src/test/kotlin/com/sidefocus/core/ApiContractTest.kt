@@ -11,6 +11,14 @@ class ApiContractTest {
             assertFailsWith<IllegalArgumentException> { normalizeEndpoint(it) }
         }
     }
+    @Test fun `USB mode allows HTTP only on the explicit loopback address and port`() {
+        val usbEndpoint = "http://127.0.0.1:8080"
+        assertEquals("$usbEndpoint/api/v1/", normalizeEndpoint(usbEndpoint, allowUsbLoopback = true))
+        assertFailsWith<IllegalArgumentException> { normalizeEndpoint(usbEndpoint) }
+        for (invalid in listOf("http://127.0.0.1", "http://127.0.0.1:99999", "http://192.168.1.2:8080", "http://127.0.0.1.example.com:8080", "http://user@127.0.0.1:8080")) {
+            assertFailsWith<IllegalArgumentException> { normalizeEndpoint(invalid, allowUsbLoopback = true) }
+        }
+    }
     @Test fun `upload excludes local states and contains only numeric timing data`() {
         val session = StudySession("uuid", 0, 5000, listOf(Segment(Posture.NORMAL, 0, 1100), Segment(Posture.PAUSED, 1100, 2100),
             Segment(Posture.UNKNOWN, 2100, 3100), Segment(Posture.FHP, 3100, 5000)))

@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sidefocus.app.FocusViewModel
+import com.sidefocus.app.BuildConfig
 import com.sidefocus.app.data.AlertMode
 import androidx.work.WorkInfo
 
@@ -88,7 +89,10 @@ private fun ServerSettings(vm: FocusViewModel) {
         TextButton(onClick = { expanded = !expanded }, enabled = !vm.connecting) { Text(if (expanded) "서버 설정 접기" else "개발용 서버 연결") }
         if (expanded) {
             OutlinedTextField(endpoint, { endpoint = it }, modifier = Modifier.fillMaxWidth(), singleLine = true,
-                label = { Text("HTTPS 서버 주소") }, placeholder = { Text("https://focus.example.com") }, enabled = !vm.connecting)
+                label = { Text("서버 주소") }, placeholder = { Text("https://focus.example.com") }, enabled = !vm.connecting)
+            if (BuildConfig.DEBUG) {
+                Text("USB 테스트 주소: http://127.0.0.1:8080", style = MaterialTheme.typography.labelSmall)
+            }
             Text("연결하면 이 기기에 쌓인 실제 기록을 모두 전송해요. 서버의 기기 인증과 설정 API가 준비되어 있어야 해요.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick = { vm.connectServer(endpoint) }, enabled = endpoint.isNotBlank() && !vm.connecting) {
                 if (vm.connecting) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)) }

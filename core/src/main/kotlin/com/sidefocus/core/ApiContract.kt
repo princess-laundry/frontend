@@ -7,13 +7,14 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
-fun normalizeEndpoint(value: String): String {
+fun normalizeEndpoint(value: String, allowUsbLoopback: Boolean = false): String {
     val uri = URI(value.trim())
-    require(uri.scheme == "https" && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.query == null && uri.fragment == null) {
-        "HTTPS 서버 주소를 입력해 주세요"
+    val usbLoopback = allowUsbLoopback && uri.scheme == "http" && uri.host == "127.0.0.1" && uri.port in 1..65535
+    require((uri.scheme == "https" || usbLoopback) && !uri.host.isNullOrBlank() && uri.userInfo == null && uri.query == null && uri.fragment == null) {
+        if (allowUsbLoopback) "HTTPS 서버 주소 또는 USB 테스트 주소를 입력해 주세요" else "HTTPS 서버 주소를 입력해 주세요"
     }
     require(uri.path.orEmpty().trimEnd('/') in listOf("", "/api/v1")) { "서버의 기본 주소 또는 /api/v1 주소를 입력해 주세요" }
-    return URI("https", null, uri.host, uri.port, "/api/v1/", null, null).toASCIIString()
+    return URI(uri.scheme, null, uri.host, uri.port, "/api/v1/", null, null).toASCIIString()
 }
 
 @Serializable

@@ -201,7 +201,8 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun connectServer(value: String) {
         if (connecting) return
-        val endpoint = runCatching { normalizeEndpoint(value) }.getOrElse { message = it.message; return }
+        val endpoint = runCatching { normalizeEndpoint(value, allowUsbLoopback = BuildConfig.DEBUG) }
+            .getOrElse { message = it.message; return }
         connecting = true
         viewModelScope.launch {
             try {
@@ -210,7 +211,7 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
                     app.preferences.saveThresholds(config)
                     settings(preferences.value.copy(endpoint = endpoint))
                 }
-                scheduleSync(app)
+                scheduleSync(app, replacePending = true)
                 message = "서버에 연결했어요. 저장된 기록의 전송을 예약했어요."
             } catch (exception: CancellationException) { throw exception }
             catch (_: Exception) { message = "연결하지 못했어요. 서버 주소와 네트워크를 확인해 주세요." }
