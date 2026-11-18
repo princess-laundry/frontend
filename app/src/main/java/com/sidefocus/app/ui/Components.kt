@@ -23,9 +23,9 @@ import java.util.Locale
 val Blue = Color(0xFF3865E9)
 val Teal = Color(0xFF008779)
 val Amber = Color(0xFFD78B20)
-val Coral = Color(0xFFE17463)
 fun postureColor(state: Posture): Color = when (state) {
-    Posture.NORMAL -> Teal; Posture.FHP -> Amber; Posture.LEAN -> Coral
+    Posture.NORMAL -> Teal
+    Posture.FHP, Posture.LEAN -> Amber
     else -> Color(0xFF8B95A6)
 }
 fun clock(ms: Long): String {
@@ -87,12 +87,14 @@ fun PostureRing(ratio: Float, hasData: Boolean, modifier: Modifier = Modifier) {
 
 @Composable
 fun PostureBreakdown(durationFor: (Posture) -> Long) {
-    listOf(Posture.NORMAL, Posture.FHP, Posture.LEAN, Posture.AWAY).forEach { state ->
+    listOf(Posture.NORMAL, Posture.FHP, Posture.AWAY).forEach { state ->
+        // Older sessions still store leaning separately.
+        val time = durationFor(state) + if (state == Posture.FHP) durationFor(Posture.LEAN) else 0L
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(8.dp).background(postureColor(state), RoundedCornerShape(4.dp)))
             Spacer(Modifier.width(10.dp))
             Text(state.label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-            Text(duration(durationFor(state)), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(duration(time), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
         }
     }
 }

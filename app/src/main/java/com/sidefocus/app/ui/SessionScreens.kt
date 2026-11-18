@@ -138,10 +138,7 @@ fun SessionScreen(vm: FocusViewModel, foreground: Boolean, onFinish: () -> Unit)
         if (vm.demo) {
             Text("상태를 눌러 기록 흐름을 확인하세요.\n데모 기록은 통계와 서버 전송에서 제외돼요.", style = MaterialTheme.typography.bodySmall, color = Blue)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(Posture.NORMAL, Posture.FHP).forEach { p -> FilterChip(state == p, { vm.demoState(p) }, { Text(p.label) }) }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(Posture.LEAN, Posture.AWAY).forEach { p -> FilterChip(state == p, { vm.demoState(p) }, { Text(p.label) }) }
+                listOf(Posture.NORMAL, Posture.FHP, Posture.AWAY).forEach { p -> FilterChip(state == p, { vm.demoState(p) }, { Text(p.label) }) }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -151,7 +148,7 @@ fun SessionScreen(vm: FocusViewModel, foreground: Boolean, onFinish: () -> Unit)
             }
             Button(onClick = onFinish, modifier = Modifier.weight(1f).heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp)) { Text("집중 마치기") }
         }
-        Text("자세 판정은 실험 전 초기 기준이에요.\n인식이 불안정한 시간은 공부 시간에서 제외해요.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("인식이 불안정한 시간은 공부 시간에서 제외해요.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         PrivacyNote()
     }
 }
