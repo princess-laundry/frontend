@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 
+// Config v1 describes the old torso angle; v2 is the first pelvis-to-ear configuration.
+internal const val MIN_AXIS_THRESHOLD_VERSION = 2
+
 enum class AlertMode(val label: String) { SOUND("소리"), VIBRATION("진동"), OFF("끄기") }
 data class Preferences(
     val alertMode: AlertMode = AlertMode.VIBRATION,
@@ -28,9 +31,13 @@ class PreferenceStore(context: Context) {
             .putString("endpoint", value.endpoint.trim()).apply()
         mutable.value = value.copy(endpoint = value.endpoint.trim())
     }
-    fun thresholds(): Thresholds = runCatching {
-        AppJson.decodeFromString<Thresholds>(prefs.getString("thresholds", null) ?: error("No config"))
-    }.getOrDefault(Thresholds())
+    fun thresholds(): Thresholds {
+        val stored = prefs.getString("thresholds", null)?.let { json ->
+            runCatching { AppJson.decodeFromString<Thresholds>(json) }.getOrNull()
+        }
+        return stored?.takeIf { it.version >= MIN_AXIS_THRESHOLD_VERSION }
+            ?: Thresholds(version = MIN_AXIS_THRESHOLD_VERSION)
+    }
     fun saveThresholds(value: Thresholds) { prefs.edit().putString("thresholds", AppJson.encodeToString(value)).apply() }
     fun reset() { prefs.edit().clear().apply(); mutable.value = Preferences() }
     private fun read() = Preferences(

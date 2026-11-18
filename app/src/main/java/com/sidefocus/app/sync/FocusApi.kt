@@ -1,6 +1,7 @@
 package com.sidefocus.app.sync
 
 import com.sidefocus.app.data.AppJson
+import com.sidefocus.app.data.MIN_AXIS_THRESHOLD_VERSION
 import com.sidefocus.core.SessionUpload
 import com.sidefocus.core.Thresholds
 import kotlinx.serialization.SerialName
@@ -22,7 +23,16 @@ import java.util.concurrent.TimeUnit
     @SerialName("t2_angle") val leanDegrees: Double, @SerialName("stable_sec") val stableSec: Double,
     @SerialName("analysis_fps") val analysisFps: Int
 ) {
-    fun thresholds() = Thresholds(version, headRatio, leanDegrees, (stableSec * 1000).toLong(), analysisFps)
+    fun thresholds(): Thresholds {
+        require(version >= MIN_AXIS_THRESHOLD_VERSION) { "서버의 자세 기준 설정을 v2 이상으로 업데이트해 주세요" }
+        return Thresholds(
+            version = version,
+            headRatio = headRatio,
+            leanDegrees = leanDegrees,
+            stableMs = (stableSec * 1000).toLong(),
+            analysisFps = analysisFps
+        )
+    }
 }
 
 interface FocusApi {

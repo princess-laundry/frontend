@@ -23,6 +23,24 @@ class SyncClientTest {
     private fun client() = SyncClient(server.url("/api/v1/").toString(), "device-id", vault)
     private fun json(body: String, code: Int = 200) = MockResponse().setResponseCode(code).setHeader("Content-Type", "application/json").setBody(body)
     private fun session() = StudySession("stable-id", 0, 1000, listOf(Segment(Posture.NORMAL, 0, 1000))).upload("0.1")
+    @Test fun `V4 config supplies the axis threshold and keeps the app pitch threshold`() = runBlocking {
+        vault.token = "valid"
+        server.enqueue(json("""{"version":2,"t1_ratio":0.35,"t2_angle":15,"stable_sec":2,"analysis_fps":5,"t1_delta":null,"t2_delta":null}"""))
+        val thresholds = client().config()
+        assertEquals(2, thresholds.version)
+        assertEquals(15.0, thresholds.leanDegrees, 0.0)
+        assertEquals(42.0, thresholds.pitchDegrees, 0.0)
+    }
+    @Test fun `v1 torso threshold cannot be used as the axis threshold`() = runBlocking {
+        vault.token = "valid"
+        server.enqueue(json("""{"version":1,"t1_ratio":0.35,"t2_angle":20,"stable_sec":2,"analysis_fps":5}"""))
+        try {
+            client().config()
+            fail("Expected rejection of v1 thresholds")
+        } catch (error: IllegalArgumentException) {
+            assertTrue(error.message.orEmpty().contains("v2"))
+        }
+    }
     @Test fun `401 refreshes exactly once with the same idempotency key`() = runBlocking {
         vault.token = "expired"
         server.enqueue(json("{}", 401))
