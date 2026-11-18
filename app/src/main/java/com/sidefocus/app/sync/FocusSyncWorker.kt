@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.*
 import com.sidefocus.app.BuildConfig
 import com.sidefocus.app.FocusApplication
+import com.sidefocus.core.normalizeEndpoint
 import com.sidefocus.core.upload
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.withLock
@@ -16,8 +17,10 @@ class FocusSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
     override suspend fun doWork(): Result {
         val app = applicationContext as FocusApplication
         return app.syncMutex.withLock {
-            val endpoint = app.preferences.state.value.endpoint
-            if (endpoint.isBlank()) return@withLock Result.success()
+            val storedEndpoint = app.preferences.state.value.endpoint
+            if (storedEndpoint.isBlank()) return@withLock Result.success()
+            val endpoint = runCatching { normalizeEndpoint(storedEndpoint, allowUsbLoopback = BuildConfig.DEBUG) }
+                .getOrElse { return@withLock Result.failure(workDataOf("error" to "서버 주소를 확인해 주세요")) }
             val client = SyncClient(endpoint, app.preferences.deviceId, TokenVault(applicationContext))
             try {
                 app.preferences.saveThresholds(client.config())
@@ -43,12 +46,16 @@ class FocusSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
     }
 }
 
-fun scheduleSync(context: Context) {
+fun scheduleSync(context: Context, replacePending: Boolean = false) {
     val app = context.applicationContext as FocusApplication
-    if (app.preferences.state.value.endpoint.isBlank()) return
+    val endpoint = runCatching { normalizeEndpoint(app.preferences.state.value.endpoint, allowUsbLoopback = BuildConfig.DEBUG) }
+        .getOrElse { return }
+    // ADB reverse can reach the PC even when Android has no active network.
+    val requiredNetwork = if (endpoint.startsWith("http://")) NetworkType.NOT_REQUIRED else NetworkType.CONNECTED
     val request = OneTimeWorkRequestBuilder<FocusSyncWorker>()
-        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+        .setConstraints(Constraints.Builder().setRequiredNetworkType(requiredNetwork).build())
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
-    // A finish event arriving during an upload gets its own subsequent pass.
-    WorkManager.getInstance(context).enqueueUniqueWork(SYNC_WORK, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    // Reconnecting replaces work scheduled for the previous connection; a completed session queues another pass.
+    val policy = if (replacePending) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.APPEND_OR_REPLACE
+    WorkManager.getInstance(context).enqueueUniqueWork(SYNC_WORK, policy, request)
 }
