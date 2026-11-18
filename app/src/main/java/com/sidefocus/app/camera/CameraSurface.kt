@@ -133,14 +133,29 @@ fun CameraSurface(
                                         val mpImage = BitmapImageBuilder(bitmap).build()
                                         val result = try { detector!!.detectForVideo(mpImage, now) } finally { mpImage.close() }
                                         val landmarks = result.landmarks().firstOrNull()
-                                        fun side(ear: Int, shoulder: Int, hip: Int): BodySide? {
-                                            if (landmarks == null || landmarks.size < 25) return null
-                                            fun point(i: Int) = landmarks[i].let { p -> Point(p.x().toDouble() * bitmap.width,
-                                                p.y().toDouble() * bitmap.height,
-                                                if (p.x() in 0f..1f && p.y() in 0f..1f) minOf(p.visibility().orElse(0f), p.presence().orElse(0f)) else 0f) }
-                                            return BodySide(point(ear), point(shoulder), point(hip))
+                                        fun point(index: Int): Point? = landmarks?.getOrNull(index)?.let { landmark ->
+                                            val x = landmark.x().toDouble()
+                                            val y = landmark.y().toDouble()
+                                            val confidence = if (x in 0.0..1.0 && y in 0.0..1.0) {
+                                                minOf(landmark.visibility().orElse(0f), landmark.presence().orElse(0f))
+                                            } else 0f
+                                            Point(x * bitmap.width, y * bitmap.height, confidence)
                                         }
-                                        val frame = CameraFrame(PoseObservation(now, landmarks != null, side(7,11,23), side(8,12,24)), bitmap.width, bitmap.height)
+                                        fun side(ear: Int, shoulder: Int, hip: Int): BodySide? {
+                                            return BodySide(
+                                                point(ear) ?: return null,
+                                                point(shoulder) ?: return null,
+                                                point(hip) ?: return null
+                                            )
+                                        }
+                                        val observation = PoseObservation(
+                                            timestampMs = now,
+                                            personDetected = landmarks != null,
+                                            left = side(7, 11, 23),
+                                            right = side(8, 12, 24),
+                                            nose = point(0)
+                                        )
+                                        val frame = CameraFrame(observation, bitmap.width, bitmap.height)
                                         ContextCompat.getMainExecutor(context).execute { if (!disposed.get()) latestFrame(frame) }
                                     } finally {
                                         if (bitmap !== raw) bitmap.recycle()
