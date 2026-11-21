@@ -1,7 +1,9 @@
 package com.sidefocus.app
 
 import android.app.Application
+import android.os.Build
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.runtime.*
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -41,6 +43,7 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private var sessionThresholds = app.preferences.thresholds()
     private var estimator = PostureEstimator(app.preferences.thresholds())
+    private val latency = LatencyMeter()
     private val setupGate = SetupGate()
     private var recorder: SessionRecorder? = null
     private var backgrounded = false
@@ -115,6 +118,9 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
         lastFrameAt = SystemClock.elapsedRealtime()
         frameSize = frame.width to frame.height
         feedback = estimator.update(frame.observation)
+        if (screen == Screen.SESSION) {
+            latency.add(SystemClock.elapsedRealtime() - frame.observation.timestampMs, frame.observation.timestampMs)
+        }
         if (!stable) feedback = feedback.copy(needsReset = true, message = "스마트폰을 세워 흔들리지 않게 고정해 주세요")
         if (screen == Screen.SETUP) {
             setup = setupGate.progress(feedback.framed && stable && cameraError == null, lastFrameAt)
@@ -127,6 +133,7 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     fun startDemo() { beginSetup(true); startSession() }
     private fun startSession() {
         val now = SystemClock.elapsedRealtime()
+        latency.reset()
         lastFrameAt = now
         recorder = SessionRecorder(UUID.randomUUID().toString(), System.currentTimeMillis(), now, demo, sessionThresholds.version)
         recorder!!.transition(if (demo) Posture.NORMAL else feedback.state, now)
@@ -166,6 +173,11 @@ class FocusViewModel(application: Application) : AndroidViewModel(application) {
     fun finish() {
         val active = recorder ?: return
         val result = active.snapshot(SystemClock.elapsedRealtime())
+        if (!result.demo) {
+            Log.i("SideFocusLatency", "session=${result.id} device=${Build.MANUFACTURER} ${Build.MODEL} " +
+                "sdk=${Build.VERSION.SDK_INT} thresholdVersion=${result.thresholdVersion} " +
+                "elapsedMs=${result.endedAt - result.startedAt} ${latency.summary().report()}")
+        }
         recorder = null
         snapshot = result
         report = result

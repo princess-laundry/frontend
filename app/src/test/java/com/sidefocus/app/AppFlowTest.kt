@@ -28,6 +28,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowSystemClock
+import org.robolectric.shadows.ShadowLog
 import java.io.File
 import java.time.Duration
 
@@ -43,6 +44,7 @@ class AppFlowTest {
     @get:Rule(order = 1) val compose = createAndroidComposeRule<MainActivity>()
 
     @Test fun `run demo then verify v2 starts directly and recognizes bowed head`() {
+        ShadowLog.clear()
         val vm = ViewModelProvider(compose.activity)[FocusViewModel::class.java]
         compose.waitUntil(10_000) { vm.ready }
         compose.onNodeWithText("집중 시작하기").assertIsEnabled()
@@ -69,6 +71,7 @@ class AppFlowTest {
         screenshot("06-report")
         compose.waitUntil(10_000) { vm.rows.value.any { it.session().demo } }
         assertTrue(vm.rows.value.all { it.syncStatus == "DEMO" })
+        assertTrue(ShadowLog.getLogsForTag("SideFocusLatency").isEmpty())
         verifyV2Session(vm)
         verifyLegacyReport(vm)
     }
@@ -83,21 +86,39 @@ class AppFlowTest {
             feedFrames(vm, count = 1, noseY = 30.0)
             assertEquals(Screen.SESSION, vm.screen)
             assertEquals(2, vm.snapshot?.thresholdVersion)
-            feedFrames(vm, count = 20, noseY = 30.0)
+            feedFrames(vm, count = 20, noseY = 30.0, analysisMs = 80)
             assertEquals(Posture.NORMAL, vm.feedback.state)
-            feedFrames(vm, count = 20, noseY = 90.0)
+            feedFrames(vm, count = 20, noseY = 90.0, analysisMs = 260)
             assertEquals(Posture.FHP, vm.feedback.state)
             assertFalse(vm.feedback.calibrated)
         }
         compose.onNodeWithText("거북목").assertIsDisplayed()
-        compose.runOnIdle { vm.finish() }
+        compose.runOnIdle {
+            vm.pause()
+            feedFrames(vm, count = 5, noseY = 30.0, analysisMs = 999)
+            vm.finish()
+            val firstReport = ShadowLog.getLogsForTag("SideFocusLatency").single().msg
+            assertTrue(firstReport.contains("처리 지연 n=40 p50=80ms p95=260ms max=260ms"))
+            assertTrue(firstReport.contains("200ms 초과 20 회"))
+            assertTrue(firstReport.contains("thresholdVersion=2"))
+
+            // A new session must exclude setup frames and the previous session's samples.
+            vm.beginSetup()
+            feedFrames(vm, count = 31, noseY = 30.0)
+            assertEquals(Screen.SESSION, vm.screen)
+            feedFrames(vm, count = 3, noseY = 30.0, analysisMs = 120)
+            vm.finish()
+            val nextReport = ShadowLog.getLogsForTag("SideFocusLatency").last().msg
+            assertTrue(nextReport.contains("처리 지연 n=3 p50=120ms p95=120ms max=120ms"))
+        }
     }
 
-    private fun feedFrames(vm: FocusViewModel, count: Int, noseY: Double) {
+    private fun feedFrames(vm: FocusViewModel, count: Int, noseY: Double, analysisMs: Long = 0) {
         val side = BodySide(Point(100.0, 30.0), Point(100.0, 100.0), Point(100.0, 300.0))
         repeat(count) {
             ShadowSystemClock.advanceBy(Duration.ofMillis(200))
             val pose = PoseObservation(SystemClock.elapsedRealtime(), true, right = side, nose = Point(140.0, noseY))
+            ShadowSystemClock.advanceBy(Duration.ofMillis(analysisMs))
             vm.frame(CameraFrame(pose, 480, 640))
         }
     }
