@@ -51,6 +51,8 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`
 - UI 테스트 이미지: `app/build/screenshots/`
 - Android Lint 및 debug APK 빌드
 
+[중간 발표용 화면과 서버 연결 확인 결과](docs/presentation/2026-11-21/README.md)를 참고하세요.
+
 [실기기 확인 항목](docs/device-validation.md)에 카메라·음성·진동·성능 검증 방법을 정리했습니다. 백엔드 V4의 v2 설정은 골반→귀 기울기 15도와 안정화 2초를 제공합니다. 고개 숙임은 앱의 기본값 42도를 사용합니다. 구도가 안정되면 개인 기준 측정 없이 세션이 시작됩니다.
 
 프레임과 랜드마크는 기기 메모리에서만 사용합니다. 원본 영상 저장 권한이나 업로드 API는 없습니다.
